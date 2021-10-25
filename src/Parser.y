@@ -3,7 +3,7 @@
 module Parser where
 
 import Lexer
-import Syntax2
+import Syntax
 
 }
 
@@ -52,13 +52,16 @@ import Syntax2
   ident { Ident $$ }
   strlit { StrLit $$ }
   intlit { IntLit $$ }
+
+%nonassoc ':='
+
 %%
 
 
-tydec :: {(Symbol, Ty)}
+tydec :: {(Symbol, SyntaxTy)}
 tydec : type ident '=' ty { ($2,$4) }
 
-ty :: {Ty}
+ty :: {SyntaxTy}
    : ident { NameTy $1 }
    | '{' tyfields '}' {RecordTy $2}
    | array of ident {ArrayTy $3}
@@ -81,8 +84,8 @@ lvaluePrime :: {Var}
             | lvaluePrime '[' exp ']' { SubscriptVar $1 $3 }
 
 vardec :: {Dec}
-       : var ident ':=' exp {VarDec $2 True Nothing $4}
-       | var ident ':' ident exp {VarDec $2 True (Just $4) $5}
+       : var ident ':' ident ':=' exp {VarDec $2 True (Just $4) $6}
+       | var ident ':=' exp {VarDec $2 True Nothing $4}
 
 fundec :: {Fundec}
        : function ident '(' tyfields ')' '=' exp {Fundec $2 $4 Nothing $7}
@@ -138,7 +141,7 @@ expSequencePrime :: {[Exp]}
 
 {
 parseError :: [Token] -> a
-parseError (x:y:xs) = error ("Parsing this token got wrong " ++ show x ++ "with after" ++ show y)
+parseError (x:y:xs) = error ("Parsing this token got wrong (" ++ show x ++ ") with after (" ++ show y ++ ")")
 parseError [x] = error ("Parsing with just this token left failed " ++ show x)
 parseError _ = error "Parse error"
 }

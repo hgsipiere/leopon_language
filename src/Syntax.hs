@@ -1,9 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE TemplateHaskell #-}
 
-module Syntax2 where
-
-import Macros
+module Syntax where
 
 type Symbol = String
 
@@ -31,10 +28,10 @@ data Exp
 data Dec
   = FunctionDec Fundec
   | VarDec {name :: Symbol, escape :: Bool, typ :: Maybe Symbol, init :: Exp}
-  | TypeDec (Symbol, Ty)
+  | TypeDec (Symbol, SyntaxTy)
   deriving (Show, Eq)
 
-data Ty = NameTy Symbol | RecordTy [Field] | ArrayTy Symbol
+data SyntaxTy = NameTy Symbol | RecordTy [Field] | ArrayTy Symbol
   deriving (Show, Eq)
 
 data Oper = PlusOp | MinusOp | TimesOp | DivideOp | EqOp | NeqOp | LtOp | LeOp | GtOp | GeOp

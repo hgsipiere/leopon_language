@@ -28,6 +28,7 @@ library
   build-depends:
       array
     , base >=4.7 && <5
+    , bifunctors
     , containers
     , megaparsec
     , template-haskell
@@ -38,10 +39,10 @@ executable tiger
   main-is: Main.hs
   other-modules:
       Lexer
-      Macros
       Parser
       Progs
-      Syntax2
+      Syntax
+      TypeCheck
       Util
       Paths_tiger
   hs-source-dirs:
@@ -51,6 +52,7 @@ executable tiger
   build-depends:
       array
     , base >=4.7 && <5
+    , bifunctors
     , containers
     , megaparsec
     , template-haskell

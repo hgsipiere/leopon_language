@@ -20,6 +20,7 @@ dependencies:
   - template-haskell
   - text
   - containers
+  - bifunctors
 
 library:
   source-dirs: lib
