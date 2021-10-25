@@ -1,8 +1,10 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections, PartialTypeSignatures #-}
 module TypeCheck where
 
 import Control.Applicative
 import Data.Bifunctor
+
+import Data.Traversable
 
 import Data.Either
 
@@ -77,20 +79,51 @@ transDec venv tenv (TypeDec (name, syntaxTy)) = do
   typ <- transTy tenv syntaxTy
   pure (venv, M.insert name typ tenv)
 
+-- this doesn't handle recursive functions as the function itself isn't in scope
 transDec venv tenv (FunctionDec (Fundec name params Nothing body)) = do
   fieldTypes <- mapM (transField tenv) params
-  let withFuncVEnv = M.insert name (FunEntry (fmap snd fieldTypes) bodyType) venv
   -- left biased union favours function parameters over
   -- already existing named variables with same name
-  let withFuncVarsVEnv = M.union (M.fromList $ second VarEntry <$> fieldTypes) withFuncVEnv
+  let withFuncVarsVEnv = M.union (M.fromList $ second VarEntry <$> fieldTypes) venv
   bodyType <- getTy <$> transExp withFuncVarsVEnv tenv body
   -- do not declare the localised function parameters as any params fall out of scope
-  pure (withFuncVEnv, tenv)
-  
+  pure (M.insert name (FunEntry (fmap snd fieldTypes) bodyType) venv, tenv)
+
+transDec venv tenv (FunctionDec (Fundec name params (Just bodyTypeAnnotSymbol) body)) = do
+  fieldTypes <- mapM (transField tenv) params
+  let withFuncVarsVEnv = M.union (M.fromList $ second VarEntry <$> fieldTypes) venv                                                                           
+  bodyType <- getTy <$> transExp withFuncVarsVEnv tenv body
+  bodyTypeAnnot <- transTy tenv (NameTy bodyTypeAnnotSymbol)
+  if bodyType /= bodyTypeAnnot then Left ("function with name " ++ name ++ " has differing function body type and annotation") else
+    pure (M.insert name (FunEntry (fmap snd fieldTypes) bodyType) venv, tenv)
+
+-- this language lacks enums so I think <= works on integers, nothing we've not done before
 transExp :: VEnv -> TEnv -> Exp -> Either String ExpTy
-transExp venv tenv (OpExp left PlusOp right) = do
+transExp venv tenv (OpExp left _ right) = do
   leftIsInt <- isInt <$> transExp venv tenv left
   rightIsInt <- isInt <$> transExp venv tenv right
   case leftIsInt && rightIsInt of
-    True -> Right (ExpTy () TInt)
-    False -> Left (show left ++ "\n is meant to be Int\n" ++ show right ++ "\n is meant to be Int\n")
+    True -> Right $ ExpTy () TInt
+    False -> Left $ show left ++ "\n is meant to be Int\n" ++ show right ++ "\n is meant to be Int\n"
+
+transExp venv tenv (VarExp var) = transVar venv tenv var
+transExp venv tenv NilExp = pure $ ExpTy () TNil
+transExp venv tenv (IntExp _) = pure $ ExpTy () TInt
+transExp venv tenv (StringExp _) = pure $ ExpTy () TString
+transExp venv tenv (CallExp funcName args) = case M.lookup funcName venv of
+  Nothing -> Left $ "undefined function " ++ funcName
+  Just (VarEntry ty) -> Left $ "trying to call variable (not function) " ++ funcName
+  Just (FunEntry formals res) -> do
+   argTypes <- fmap2 getTy $ mapM (transExp venv tenv) args
+   if argTypes /= formals then Left (funcName ++ " has type mismatch between expected and provided arguments") else
+     pure $ ExpTy () res
+transExp venv tenv (RecordExp recordTypName namedFieldExps) = do
+  recordTyp <- transTy tenv (NameTy recordTypName)
+  case recordTyp of
+    TRecord fieldTypes -> do
+      -- some fun point-free to hurt eyeballs
+      namedFieldExpTypes <- mapM (sequenceA . second (fmap getTy . transExp venv tenv)) namedFieldExps
+      if namedFieldExpTypes == fieldTypes then pure (ExpTy () recordTyp) else Left $ "mismatching field types for record " ++ recordTypName
+    _ -> Left $ recordTypName ++ " isn't a record type "
+
+--typedFieldExps <- mapM (fmap second . transExp venv tenv) namedFieldExps
